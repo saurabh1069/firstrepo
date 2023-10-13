@@ -1,34 +1,96 @@
-To automate the assignment of 10 ServiceNow tickets to 3 resources in a team using a logical workflow, you can use a combination of if statements and for loops in Automation Anywhere. Here's a step-by-step logical workflow:
+# Load the Outlook COM object
+Add-Type -AssemblyName 'Microsoft.Office.Interop.Outlook'
+$Outlook = New-Object -ComObject Outlook.Application
+$Namespace = $Outlook.GetNamespace('MAPI')
+$Inbox = $Namespace.GetDefaultFolder('olFolderInbox')
+$SentItems = $Namespace.GetDefaultFolder('olFolderSentMail')
 
-1. **Launch ServiceNow**: Use Automation Anywhere to launch the ServiceNow application.
+# Define time intervals for reminders
+$firstReminderDays = 5
+$secondReminderDays = 2
+$thirdReminderDays = 2
 
-2. **Log In (if required)**: If ServiceNow requires authentication, create automation to log in using appropriate credentials.
+# Get today's date
+$today = Get-Date
 
-3. **Navigate to Ticket Assignment**: Automate the navigation to the ticket assignment section within ServiceNow.
+# Function to send a reminder email
+Function Send-Reminder($originalEmail, $reminderNumber) {
+    # Create a new email item
+    $reminderEmail = $Outlook.CreateItem(0)
+    
+    # Set the properties of the reminder email
+    $reminderEmail.Subject = "Service Desk Reminder: $reminderNumber - $originalEmail.Subject"
+    $reminderEmail.Body = "This is a reminder for your Service Desk request: $($originalEmail.Subject)."
+    $reminderEmail.Recipients.Add($originalEmail.SenderEmailAddress)
+    
+    # Send the reminder email
+    $reminderEmail.Send()
+}
 
-4. **Retrieve Ticket Information**: Use GUI automation to extract information about the 10 available tickets, including ticket IDs and any other relevant details.
+# Function to send a final email
+Function Send-Final-Email($originalEmail) {
+    # Create a new email item
+    $finalEmail = $Outlook.CreateItem(0)
+    
+    # Set the properties of the final email
+    $finalEmail.Subject = "Service Desk Final Reminder - $originalEmail.Subject"
+    $finalEmail.Body = "This is the final reminder for your Service Desk request: $($originalEmail.Subject)."
+    $finalEmail.Recipients.Add($originalEmail.SenderEmailAddress)
+    
+    # Send the final email
+    $finalEmail.Send()
+}
 
-5. **Calculate Ticket Distribution**:
-   - Calculate how many tickets each resource should handle: `tickets_per_resource = total_tickets // num_resources`
-   - Calculate the remaining tickets: `remaining_tickets = total_tickets % num_resources`
+# Define a function for processing emails in parallel
+Function Process-Email($email) {
+    $originalEmail = $null
 
-6. **Assign Tickets Using For Loop**:
-   - Use a for loop that iterates through the 3 resources (assuming `num_resources = 3`):
-     - Within the loop:
-       - Check if it's the last iteration (`if current_resource == num_resources`).
-         - If it is the last iteration, assign the remaining tickets to this resource: `assignments[current_resource] = assignments[current_resource] + remaining_tickets`
-         - If not the last iteration, assign an equal number of tickets to this resource: `assignments[current_resource] = tickets_per_resource`
-       - Automate the assignment of tickets to the current resource:
-         - Click on a ticket.
-         - Select the current resource from a dropdown or assign the ticket in the way your ServiceNow instance allows.
-         - Move to the next ticket and repeat the assignment until the required number of tickets is assigned to the current resource.
+    if ($email.ConversationID) {
+        $originalEmail = $SentItems.Items | Where-Object { $_.ConversationID -eq $email.ConversationID } | Sort-Object ReceivedTime | Select-Object -Last 1
+    }
 
-7. **Verify and Log Assignments**: After the for loop completes, verify that each resource has been assigned the correct number of tickets. You can use Automation Anywhere's features to check ticket assignments and log any discrepancies.
+    if ($originalEmail) {
+        $originalReceivedDate = $originalEmail.ReceivedTime
+        $timeSinceReceived = ($today - $originalReceivedDate).TotalDays
 
-8. **Log Out and Close ServiceNow**: If necessary, create automation to log out of ServiceNow and close the application.
+        if ($timeSinceReceived -ge $firstReminderDays) {
+            Send-Reminder $originalEmail "Reminder 1"
+        } elseif ($timeSinceReceived -ge ($firstReminderDays + $secondReminderDays)) {
+            Send-Reminder $originalEmail "Reminder 2"
+        } elseif ($timeSinceReceived -ge ($firstReminderDays + $secondReminderDays + $thirdReminderDays)) {
+            Send-Reminder $originalEmail "Reminder 3"
+            Send-Final-Email $originalEmail
+        }
+    }
+}
 
-9. **Error Handling**: Implement error handling to deal with unexpected situations, such as errors in ServiceNow or disruptions in the automation process.
+# Create a runspace pool for parallel processing
+$runspacePool = [runspacefactory]::CreateRunspacePool(1, [Environment]::ProcessorCount)
+$runspacePool.Open()
 
-10. **Schedule and Run**: Schedule the automation to run at the desired times or trigger it manually as needed.
+# Create runspaces and assign email processing to them
+$runspaces = @()
+foreach ($email in $Inbox.Items) {
+    $runspace = [powershell]::Create()
+    $runspace.RunspacePool = $runspacePool
 
-This logical workflow will distribute the tickets evenly among the 3 resources in your team using a for loop and appropriate calculations. Ensure that you adapt the GUI automation steps to match the specific interface and functionality of your ServiceNow instance. Testing and validation are crucial to ensure the automation works reliably.
+    $runspace.AddScript({
+        param($email)
+        Process-Email $email
+    })
+    $runspace.AddArgument($email)
+
+    $runspaces += [PSCustomObject]@{
+        Pipe = $runspace
+        Status = $runspace.BeginInvoke()
+    }
+}
+
+# Wait for all runspaces to complete
+$runspaces | ForEach-Object {
+    $_.Pipe.EndInvoke($_.Status)
+    $_.Pipe.Dispose()
+}
+
+# Release COM objects
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Outlook) | Out-Null
