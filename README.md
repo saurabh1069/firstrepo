@@ -2,8 +2,14 @@
 Add-Type -AssemblyName 'Microsoft.Office.Interop.Outlook'
 $Outlook = New-Object -ComObject Outlook.Application
 $Namespace = $Outlook.GetNamespace('MAPI')
-$Inbox = $Namespace.GetDefaultFolder('olFolderInbox')
-$SentItems = $Namespace.GetDefaultFolder('olFolderSentMail')
+
+# Specify the folder paths for "Testing" and "Testing1"
+$folderPathTesting = "Testing"
+$folderPathTesting1 = "Testing1"
+
+# Get the folders by path
+$folderTesting = $Namespace.GetDefaultFolder('olFolderInbox').Folders.Item($folderPathTesting)
+$folderTesting1 = $Namespace.GetDefaultFolder('olFolderInbox').Folders.Item($folderPathTesting1)
 
 # Define time intervals for reminders
 $firstReminderDays = 5
@@ -13,13 +19,16 @@ $thirdReminderDays = 2
 # Get today's date
 $today = Get-Date
 
+# Hashtable to store the latest emails in "Testing" conversations
+$latestEmails = @{}
+
 # Function to send a reminder email
 Function Send-Reminder($originalEmail, $reminderNumber) {
     # Create a new email item
     $reminderEmail = $Outlook.CreateItem(0)
     
     # Set the properties of the reminder email
-    $reminderEmail.Subject = "Service Desk Reminder: $reminderNumber - $originalEmail.Subject"
+    $reminderEmail.Subject = "Service Desk Reminder: $reminderNumber - $($originalEmail.Subject)"
     $reminderEmail.Body = "This is a reminder for your Service Desk request: $($originalEmail.Subject)."
     $reminderEmail.Recipients.Add($originalEmail.SenderEmailAddress)
     
@@ -33,7 +42,7 @@ Function Send-Final-Email($originalEmail) {
     $finalEmail = $Outlook.CreateItem(0)
     
     # Set the properties of the final email
-    $finalEmail.Subject = "Service Desk Final Reminder - $originalEmail.Subject"
+    $finalEmail.Subject = "Service Desk Final Reminder - $($originalEmail.Subject)"
     $finalEmail.Body = "This is the final reminder for your Service Desk request: $($originalEmail.Subject)."
     $finalEmail.Recipients.Add($originalEmail.SenderEmailAddress)
     
@@ -41,55 +50,34 @@ Function Send-Final-Email($originalEmail) {
     $finalEmail.Send()
 }
 
-# Define a function for processing emails in parallel
-Function Process-Email($email) {
-    $originalEmail = $null
+# Process emails in "Testing"
+$emailsTesting = $folderTesting.Items | Where-Object { $_.ReceivedTime -ge (Get-Date).AddDays(-7) }
 
+foreach ($email in $emailsTesting) {
     if ($email.ConversationID) {
-        $originalEmail = $SentItems.Items | Where-Object { $_.ConversationID -eq $email.ConversationID } | Sort-Object ReceivedTime | Select-Object -Last 1
-    }
+        $conversationID = $email.ConversationID
+        $originalEmail = $latestEmails[$conversationID]
 
-    if ($originalEmail) {
-        $originalReceivedDate = $originalEmail.ReceivedTime
-        $timeSinceReceived = ($today - $originalReceivedDate).TotalDays
+        if (-not $originalEmail) {
+            # New conversation in "Testing," store the current email as the latest
+            $latestEmails[$conversationID] = $email
+        } else {
+            # Existing conversation, compare received times
+            $originalReceivedDate = $originalEmail.ReceivedTime
+            $timeSinceReceived = ($today - $originalReceivedDate).TotalDays
 
-        if ($timeSinceReceived -ge $firstReminderDays) {
-            Send-Reminder $originalEmail "Reminder 1"
-        } elseif ($timeSinceReceived -ge ($firstReminderDays + $secondReminderDays)) {
-            Send-Reminder $originalEmail "Reminder 2"
-        } elseif ($timeSinceReceived -ge ($firstReminderDays + $secondReminderDays + $thirdReminderDays)) {
-            Send-Reminder $originalEmail "Reminder 3"
-            Send-Final-Email $originalEmail
+            # Check if the email in "Testing" has not been replied to in "Testing1"
+            $correspondingEmailInTesting1 = $folderTesting1.Items | Where-Object { $_.ConversationID -eq $conversationID }
+            if ($timeSinceReceived -ge $firstReminderDays -and -not $correspondingEmailInTesting1) {
+                Send-Reminder $originalEmail "Reminder 1"
+            } elseif ($timeSinceReceived -ge ($firstReminderDays + $secondReminderDays) -and -not $correspondingEmailInTesting1) {
+                Send-Reminder $originalEmail "Reminder 2"
+            } elseif ($timeSinceReceived -ge ($firstReminderDays + $secondReminderDays + $thirdReminderDays) -and -not $correspondingEmailInTesting1) {
+                Send-Reminder $originalEmail "Reminder 3"
+                Send-Final-Email $originalEmail
+            }
         }
     }
-}
-
-# Create a runspace pool for parallel processing
-$runspacePool = [runspacefactory]::CreateRunspacePool(1, [Environment]::ProcessorCount)
-$runspacePool.Open()
-
-# Create runspaces and assign email processing to them
-$runspaces = @()
-foreach ($email in $Inbox.Items) {
-    $runspace = [powershell]::Create()
-    $runspace.RunspacePool = $runspacePool
-
-    $runspace.AddScript({
-        param($email)
-        Process-Email $email
-    })
-    $runspace.AddArgument($email)
-
-    $runspaces += [PSCustomObject]@{
-        Pipe = $runspace
-        Status = $runspace.BeginInvoke()
-    }
-}
-
-# Wait for all runspaces to complete
-$runspaces | ForEach-Object {
-    $_.Pipe.EndInvoke($_.Status)
-    $_.Pipe.Dispose()
 }
 
 # Release COM objects
