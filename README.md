@@ -16,12 +16,6 @@ $firstReminderDays = 5
 $secondReminderDays = 2
 $thirdReminderDays = 2
 
-# Get today's date
-$today = Get-Date
-
-# Hashtable to store the latest emails in "Testing" conversations
-$latestEmails = @{}
-
 # Function to send a reminder email
 Function Send-Reminder($originalEmail, $reminderNumber) {
     # Create a new email item
@@ -50,32 +44,37 @@ Function Send-Final-Email($originalEmail) {
     $finalEmail.Send()
 }
 
+# Function to check if an email has replies in a specific folder
+Function EmailHasReplies($email, $folder) {
+    # Get the conversation ID of the email
+    $conversationID = $email.ConversationID
+    
+    # Check if any email in the folder has the same conversation ID (a reply)
+    $replies = $folder.Items | Where-Object { $_.ConversationID -eq $conversationID }
+    
+    # Return whether there are replies
+    return $replies.Count -gt 1
+}
+
 # Process emails in "Testing"
-$emailsTesting = $folderTesting.Items | Where-Object { $_.ReceivedTime -ge (Get-Date).AddDays(-7) }
+$emailsTesting = $folderTesting.Items
 
 foreach ($email in $emailsTesting) {
-    if ($email.ConversationID) {
-        $conversationID = $email.ConversationID
-        $originalEmail = $latestEmails[$conversationID]
-
-        if (-not $originalEmail) {
-            # New conversation in "Testing," store the current email as the latest
-            $latestEmails[$conversationID] = $email
-        } else {
-            # Existing conversation, compare received times
-            $originalReceivedDate = $originalEmail.ReceivedTime
-            $timeSinceReceived = ($today - $originalReceivedDate).TotalDays
-
-            # Check if the email in "Testing" has not been replied to in "Testing1"
-            $correspondingEmailInTesting1 = $folderTesting1.Items | Where-Object { $_.ConversationID -eq $conversationID }
-            if ($timeSinceReceived -ge $firstReminderDays -and -not $correspondingEmailInTesting1) {
-                Send-Reminder $originalEmail "Reminder 1"
-            } elseif ($timeSinceReceived -ge ($firstReminderDays + $secondReminderDays) -and -not $correspondingEmailInTesting1) {
-                Send-Reminder $originalEmail "Reminder 2"
-            } elseif ($timeSinceReceived -ge ($firstReminderDays + $secondReminderDays + $thirdReminderDays) -and -not $correspondingEmailInTesting1) {
-                Send-Reminder $originalEmail "Reminder 3"
-                Send-Final-Email $originalEmail
-            }
+    # Check if the email is within the time frame for reminders
+    $timeSinceReceived = (Get-Date) - $email.ReceivedTime
+    
+    if ($timeSinceReceived.TotalDays -ge $firstReminderDays) {
+        if (-not (EmailHasReplies $email $folderTesting1)) {
+            Send-Reminder $email "Reminder 1"
+        }
+    } elseif ($timeSinceReceived.TotalDays -ge ($firstReminderDays + $secondReminderDays)) {
+        if (-not (EmailHasReplies $email $folderTesting1)) {
+            Send-Reminder $email "Reminder 2"
+        }
+    } elseif ($timeSinceReceived.TotalDays -ge ($firstReminderDays + $secondReminderDays + $thirdReminderDays)) {
+        if (-not (EmailHasReplies $email $folderTesting1)) {
+            Send-Reminder $email "Reminder 3"
+            Send-Final-Email $email
         }
     }
 }
