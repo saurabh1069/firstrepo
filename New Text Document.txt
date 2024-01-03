@@ -1,25 +1,30 @@
-import pandas as pd
+# Define the path to the CSV file
+$csvFilePath = "C:\path\to\your\file.csv"
 
-# Read the CSV file into a DataFrame
-df = pd.read_csv(r'C:\Users\t692938\OneDrive - UBS\Rosterdata.csv')
+# Read the CSV file
+$csvData = Import-Csv $csvFilePath
 
-# Display the first few rows of the DataFrame
-df.head()
+# Iterate through each row in the CSV
+foreach ($row in $csvData) {
+    # Get the group name from the specified column in the CSV
+    $groupName = $row."Group Name"
 
-# Drop specific rows by index
-df = df.drop([0, 1, 2, 3, 8, 9, 10, 11, 16, 17])
+    # Check if the group exists in AD
+    if (Get-ADGroup -Filter { Name -eq $groupName }) {
+        # Get members of the group
+        $members = Get-ADGroupMember -Identity $groupName | Select-Object -ExpandProperty SamAccountName -First 5
 
-# Reset the index
-df = df.reset_index(drop=True)
+        # Update the result column with member names or "No member found"
+        if ($members) {
+            $row.Result = $members -join ', '
+        } else {
+            $row.Result = "No member found"
+        }
+    } else {
+        # Update the result column with "No group found"
+        $row.Result = "No group found"
+    }
+}
 
-# Rename the second column to 'GPN'
-df = df.rename(columns={df.columns[1]: 'GPN'})
-
-# Display the DataFrame with the changes
-df
-
-# Display a subset of the DataFrame (first 12 rows and first 30 columns)
-df.iloc[:12, :30]
-
-# Save the DataFrame to a new CSV file
-df.to_csv(r'C:\Users\t692938\OneDrive - UBS\UBS New File.csv', index=False, sep=",")
+# Save the updated data back to the CSV file
+$csvData | Export-Csv -Path $csvFilePath -NoTypeInformation
