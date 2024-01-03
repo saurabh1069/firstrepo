@@ -17,12 +17,22 @@ foreach ($row in $csvData) {
         # Update the result column with member names or "No member found"
         if ($members) {
             $row.Result = $members -join ', '
+
+            # Extract employee numbers for each member
+            $employeeNumbers = $members | ForEach-Object {
+                $employeeNumber = Get-ADUser -Identity $_ -Properties EmployeeNumber | Select-Object -ExpandProperty EmployeeNumber
+                $employeeNumber -or "N/A"
+            }
+
+            $row."Employee Numbers" = $employeeNumbers -join ', '
         } else {
             $row.Result = "No member found"
+            $row."Employee Numbers" = "N/A"
         }
     } else {
         # Update the result column with "No group found"
         $row.Result = "No group found"
+        $row."Employee Numbers" = "N/A"
     }
 }
 
