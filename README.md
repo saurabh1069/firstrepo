@@ -1,10 +1,71 @@
-Nilesh, you are an invaluable asset to your organization as a SharePoint administrator. Your dedication and expertise in managing this critical platform have not gone unnoticed. Your commitment to excellence in your role is commendable, and your contributions play a significant part in the smooth functioning of the company.
+#Requires -version 2.0
+#Author: Alamot
+Add-Type -AssemblyName microsoft.office.interop.outlook
+$outlook = New-Object -ComObject outlook.application
+$namespace = $Outlook.GetNameSpace("mapi")
 
-I encourage you to continue on this path of excellence. Keep staying updated with the latest SharePoint developments, as technology is ever-evolving. Continue to streamline and optimize SharePoint for the benefit of the organization, making it more efficient and user-friendly.
+# See https://docs.microsoft.com/en-us/office/vba/api/outlook.olruleactiontype
+$ACTIONS_TO_GRAB = @(6, 7, 8)
+# 6 => olRuleActionForward
+# 7 => olRuleActionForwardAsAttachment
+# 8 => olRuleActionRedirect
 
-Your willingness to adapt to changing circumstances and your proactive approach to problem-solving make you stand out. Keep up the great work and maintain your high standards of performance. Your skills and commitment will undoubtedly continue to make a positive impact on the company's success. Thank you for all you do, Nilesh!
+[Hashtable[]]$records = @()
 
+$records += @{} 
+$records[-1]['CurrentUser'] = $namespace.CurrentUser.Name 
+$records[-1]['Rules'] = @()
 
+$rules = $namespace.DefaultStore.GetRules()
 
+ForEach ($rule in $rules) {
 
+    if ($rule.Enabled) {
 
+        $actions_to_grab_found = 0
+        ForEach ($action in $rule.Actions) {
+            if ($action.Enabled -and ($ACTIONS_TO_GRAB -contains $action.ActionType)) {        
+                $actions_to_grab_found = 1
+            }
+        }
+
+        if ($actions_to_grab_found -eq 1) { 
+
+            $records[-1]['Rules'] += @{}
+            $records[-1]['Rules'][-1]['name'] = $rule.Name  
+            $records[-1]['Rules'][-1]['conditions'] = @()
+            $records[-1]['Rules'][-1]['actions'] = @()
+
+            ForEach ($condition in $rule.Conditions) {
+                if ($condition.Enabled) { 
+                    # https://docs.microsoft.com/en-us/office/vba/api/outlook.olruleconditiontype
+                    $s = "type:" + $condition.ConditionType.toString()
+                    if ("Text" -in $condition.PSobject.Properties.Name) {
+                        $s += ", text:" + $condition.Text;
+                    }
+                    if ("Recipients" -in $condition.PSobject.Properties.Name) {
+                        $s += ", recipients:" +
+                             (($condition.Recipients | select -expand Name) -join ';') 
+                    }
+                    $records[-1]['Rules'][-1]['conditions'] += $s
+                }
+            }
+
+            ForEach ($action in $rule.Actions) {
+                if ($action.Enabled -and ($ACTIONS_TO_GRAB -contains $action.ActionType)) { 
+                    $s = "type:" + $action.ActionType.toString() + ", recipients:" + 
+                         (($action.Recipients | select -expand Name) -join ';')
+                    $records[-1]['Rules'][-1]["actions"] += $s
+                }
+            }   
+
+        }
+
+    }
+}
+
+$records | ConvertTo-Json -Depth 10
+
+# Uncomment the following lines and set the proper path to write the output into a file
+# $outfile = join-path -path "\\Tcom2\shared" -childpath $($env:COMPUTERNAME + "-" + $(Get-Date -UFormat "%Y-%m-%d") + ".json")
+# $records | ConvertTo-Json -Depth 10 | Set-Content $outfile
