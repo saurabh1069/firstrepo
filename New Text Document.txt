@@ -1,40 +1,19 @@
-# Define the path to the CSV file
-$csvFilePath = "C:\path\to\your\file.csv"
+# Load Outlook COM object
+Add-Type -AssemblyName "Microsoft.Office.Interop.Outlook" | Out-Null
 
-# Read the CSV file
-$csvData = Import-Csv $csvFilePath
+# Create Outlook Application object
+$outlook = New-Object -ComObject Outlook.Application
 
-# Iterate through each row in the CSV
-foreach ($row in $csvData) {
-    # Get the group name from the specified column in the CSV
-    $groupName = $row."Group Name"
+# Access the Sent Items folder
+$sentItemsFolder = $outlook.Session.GetDefaultFolder(5) # 5 corresponds to olFolderSentMail
 
-    # Check if the group exists in AD
-    if (Get-ADGroup -Filter { Name -eq $groupName }) {
-        # Get members of the group
-        $members = Get-ADGroupMember -Identity $groupName | Select-Object -ExpandProperty SamAccountName -First 5
+# Count the number of subfolders in the Sent Items folder
+$numberOfSubfolders = $sentItemsFolder.Folders.Count
 
-        # Update the result column with member names or "No member found"
-        if ($members) {
-            $row.Result = $members -join ', '
+# Display the result
+Write-Host "Number of subfolders in Sent Items: $numberOfSubfolders"
 
-            # Extract employee numbers for each member
-            $employeeNumbers = $members | ForEach-Object {
-                $employeeNumber = Get-ADUser -Identity $_ -Properties EmployeeNumber | Select-Object -ExpandProperty EmployeeNumber
-                $employeeNumber -or "N/A"
-            }
-
-            $row."Employee Numbers" = $employeeNumbers -join ', '
-        } else {
-            $row.Result = "No member found"
-            $row."Employee Numbers" = "N/A"
-        }
-    } else {
-        # Update the result column with "No group found"
-        $row.Result = "No group found"
-        $row."Employee Numbers" = "N/A"
-    }
-}
-
-# Save the updated data back to the CSV file
-$csvData | Export-Csv -Path $csvFilePath -NoTypeInformation
+# Release COM objects
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($sentItemsFolder) | Out-Null
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($outlook) | Out-Null
+Remove-Variable outlook
