@@ -1,71 +1,56 @@
-#Requires -version 2.0
-#Author: Alamot
-Add-Type -AssemblyName microsoft.office.interop.outlook
-$outlook = New-Object -ComObject outlook.application
-$namespace = $Outlook.GetNameSpace("mapi")
+<Window x:Class="EllipseShadowAnimation.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Ellipse Shadow Animation on Hover" Height="400" Width="400">
+    <Grid>
+        <!-- Define a DropShadowEffect Resource -->
+        <Grid.Resources>
+            <DropShadowEffect x:Key="shadowEffect" BlurRadius="20" ShadowDepth="0" Color="Black" Opacity="0.5"/>
+        </Grid.Resources>
 
-# See https://docs.microsoft.com/en-us/office/vba/api/outlook.olruleactiontype
-$ACTIONS_TO_GRAB = @(6, 7, 8)
-# 6 => olRuleActionForward
-# 7 => olRuleActionForwardAsAttachment
-# 8 => olRuleActionRedirect
-
-[Hashtable[]]$records = @()
-
-$records += @{} 
-$records[-1]['CurrentUser'] = $namespace.CurrentUser.Name 
-$records[-1]['Rules'] = @()
-
-$rules = $namespace.DefaultStore.GetRules()
-
-ForEach ($rule in $rules) {
-
-    if ($rule.Enabled) {
-
-        $actions_to_grab_found = 0
-        ForEach ($action in $rule.Actions) {
-            if ($action.Enabled -and ($ACTIONS_TO_GRAB -contains $action.ActionType)) {        
-                $actions_to_grab_found = 1
-            }
-        }
-
-        if ($actions_to_grab_found -eq 1) { 
-
-            $records[-1]['Rules'] += @{}
-            $records[-1]['Rules'][-1]['name'] = $rule.Name  
-            $records[-1]['Rules'][-1]['conditions'] = @()
-            $records[-1]['Rules'][-1]['actions'] = @()
-
-            ForEach ($condition in $rule.Conditions) {
-                if ($condition.Enabled) { 
-                    # https://docs.microsoft.com/en-us/office/vba/api/outlook.olruleconditiontype
-                    $s = "type:" + $condition.ConditionType.toString()
-                    if ("Text" -in $condition.PSobject.Properties.Name) {
-                        $s += ", text:" + $condition.Text;
-                    }
-                    if ("Recipients" -in $condition.PSobject.Properties.Name) {
-                        $s += ", recipients:" +
-                             (($condition.Recipients | select -expand Name) -join ';') 
-                    }
-                    $records[-1]['Rules'][-1]['conditions'] += $s
-                }
-            }
-
-            ForEach ($action in $rule.Actions) {
-                if ($action.Enabled -and ($ACTIONS_TO_GRAB -contains $action.ActionType)) { 
-                    $s = "type:" + $action.ActionType.toString() + ", recipients:" + 
-                         (($action.Recipients | select -expand Name) -join ';')
-                    $records[-1]['Rules'][-1]["actions"] += $s
-                }
-            }   
-
-        }
-
-    }
-}
-
-$records | ConvertTo-Json -Depth 10
-
-# Uncomment the following lines and set the proper path to write the output into a file
-# $outfile = join-path -path "\\Tcom2\shared" -childpath $($env:COMPUTERNAME + "-" + $(Get-Date -UFormat "%Y-%m-%d") + ".json")
-# $records | ConvertTo-Json -Depth 10 | Set-Content $outfile
+        <!-- Ellipse with Shadow Effect -->
+        <Ellipse Width="100" Height="100" Fill="Blue" Effect="{StaticResource shadowEffect}">
+            <!-- Define Triggers for MouseEnter and MouseLeave -->
+            <Ellipse.Style>
+                <Style TargetType="Ellipse">
+                    <Style.Triggers>
+                        <!-- Trigger when mouse is over the ellipse -->
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <!-- Animate the Scale Transform to make the ellipse "come out" -->
+                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                         From="1" To="1.2" Duration="0:0:0.3" />
+                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         From="1" To="1.2" Duration="0:0:0.3" />
+                                        <!-- Animate the shadow depth to create a realistic effect -->
+                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.Effect).(DropShadowEffect.ShadowDepth)"
+                                                         From="0" To="10" Duration="0:0:0.3" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <!-- Optional: Reverse the animation on mouse leave -->
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                         From="1.2" To="1" Duration="0:0:0.3" />
+                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         From="1.2" To="1" Duration="0:0:0.3" />
+                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.Effect).(DropShadowEffect.ShadowDepth)"
+                                                         From="10" To="0" Duration="0:0:0.3" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Ellipse.Style>
+            <!-- Apply a ScaleTransform to the RenderTransform to enable scaling -->
+            <Ellipse.RenderTransform>
+                <ScaleTransform ScaleX="1" ScaleY="1" />
+            </Ellipse.RenderTransform>
+        </Ellipse>
+    </Grid>
+</Window>
