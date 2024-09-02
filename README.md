@@ -7,7 +7,7 @@
             <!-- Define a DropShadowEffect Resource -->
             <DropShadowEffect x:Key="shadowEffect" BlurRadius="28" ShadowDepth="10" Color="Black" Opacity="0.5"/>
 
-            <!-- Define the Style for the Ellipse with Triggers -->
+            <!-- Define the Style for the Outer Ellipse with Triggers -->
             <Style x:Key="AnimatedEllipseStyle" TargetType="Ellipse">
                 <Setter Property="Width" Value="180"/>
                 <Setter Property="Height" Value="100"/>
@@ -61,7 +61,14 @@
             </Style>
         </Grid.Resources>
 
-        <!-- Ellipse that uses the defined style -->
-        <Ellipse Style="{StaticResource AnimatedEllipseStyle}"/>
+        <!-- Outer Ellipse that uses the defined style -->
+        <Ellipse Style="{StaticResource AnimatedEllipseStyle}">
+            <!-- Inner Ellipse with Image Fill -->
+            <Ellipse Margin="32,22,32,22">
+                <Ellipse.Fill>
+                    <ImageBrush ImageSource="Images/Ideas_new.png"/> <!-- Path to the image file -->
+                </Ellipse.Fill>
+            </Ellipse>
+        </Ellipse>
     </Grid>
 </Window>
