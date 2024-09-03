@@ -1,39 +1,41 @@
-# Define the URL
-$url = "https://openai-nucleus-dev.azpriv-cloud.ubs.net/api/v1/openai-sandbox/chat"
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq; // Make sure to install Newtonsoft.Json via NuGet
 
-# Define the headers with the API key
-$headers = @{
-    "api-key" = "API-full"
-}
+public class Talk2Nucleus
+{
+    private static readonly HttpClient client = new HttpClient();
 
-# Define the query
-$query = "Can you introduce yourself?"
+    public static async Task<string> GetResponseAsync(string query)
+    {
+        // Define the API URL
+        string url = "https://openai-nucleus-dev.azpriv-cloud.ubs.net/api/v1/openai-sandbox/chat";
 
-# Define the body with messages
-$body = @{
-    "messages" = @(
-        @{
-            "role" = "system"
-            "content" = "Assistant is a large language model trained by OpenAI."
-        },
-        @{
-            "role" = "user"
-            "content" = $query
-        }
-    )
-}
+        // Define the API key (change this to your actual API key)
+        string apiKey = "API-full";
 
-# Convert the body to JSON format
-$bodyJson = $body | ConvertTo-Json
+        // Define the headers
+        client.DefaultRequestHeaders.Clear();
+        client.DefaultRequestHeaders.Add("api-key", apiKey);
 
-# Make the POST request
-$response = Invoke-WebRequest -Uri $url -Headers $headers -Method Post -Body $bodyJson -ContentType "application/json" -UseBasicParsing
+        // Define the body content
+        var body = new
+        {
+            messages = new[]
+            {
+                new { role = "system", content = "Assistant is a large language model trained by OpenAI." },
+                new { role = "user", content = query }
+            }
+        };
 
-# Parse the JSON response
-$responseJson = $response.Content | ConvertFrom-Json
+        // Convert the body to JSON format
+        string jsonBody = Newtonsoft.Json.JsonConvert.SerializeObject(body);
 
-# Extract the answer from the response
-$answer = $responseJson.result.content
+        // Set up the content for the POST request
+        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
-# Output the answer
-Write-Output $answer
+        try
+        {
+            // Make the POST request
