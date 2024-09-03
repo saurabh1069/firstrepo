@@ -2,40 +2,50 @@ using System;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq; // Make sure to install Newtonsoft.Json via NuGet
 
-public class Talk2Nucleus
+namespace HttpClientExample
 {
-    private static readonly HttpClient client = new HttpClient();
-
-    public static async Task<string> GetResponseAsync(string query)
+    class Program
     {
-        // Define the API URL
-        string url = "https://openai-nucleus-dev.azpriv-cloud.ubs.net/api/v1/openai-sandbox/chat";
-
-        // Define the API key (change this to your actual API key)
-        string apiKey = "API-full";
-
-        // Define the headers
-        client.DefaultRequestHeaders.Clear();
-        client.DefaultRequestHeaders.Add("api-key", apiKey);
-
-        // Define the body content
-        var body = new
+        static async Task Main(string[] args)
         {
-            messages = new[]
+            // Define the API endpoint
+            string url = "https://cirruspl-myhub-svcs-dev-neu-hackathon.azurewebsites.net/api/token/impersonate/43707788";
+
+            // Create an instance of HttpClient
+            using (HttpClient client = new HttpClient())
             {
-                new { role = "system", content = "Assistant is a large language model trained by OpenAI." },
-                new { role = "user", content = query }
+                // Define the headers
+                client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/plain"));
+
+                // Define the JSON payload
+                var jsonData = new
+                {
+                    clientKey = "B6F2584E-28E1-4AB1-A403-D54E5A1EA8AF"
+                };
+
+                // Serialize the payload to a JSON string
+                string jsonString = System.Text.Json.JsonSerializer.Serialize(jsonData);
+
+                // Create the StringContent from the JSON string
+                StringContent content = new StringContent(jsonString, Encoding.UTF8, "application/json");
+
+                // Make the POST request
+                HttpResponseMessage response = await client.PostAsync(url, content);
+
+                // Ensure the response is successful
+                if (response.IsSuccessStatusCode)
+                {
+                    // Read the response content
+                    string responseContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine("Response received: " + responseContent);
+                }
+                else
+                {
+                    // Handle error response
+                    Console.WriteLine("Error: " + response.StatusCode);
+                }
             }
-        };
-
-        // Convert the body to JSON format
-        string jsonBody = Newtonsoft.Json.JsonConvert.SerializeObject(body);
-
-        // Set up the content for the POST request
-        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-
-        try
-        {
-            // Make the POST request
+        }
+    }
+}
