@@ -1,51 +1,38 @@
-using System;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
+stages:
+  - build
+  - deploy
 
-namespace HttpClientExample
-{
-    class Program
-    {
-        static async Task Main(string[] args)
-        {
-            // Define the API endpoint
-            string url = "https://cirruspl-myhub-svcs-dev-neu-hackathon.azurewebsites.net/api/token/impersonate/43707788";
+variables:
+  SOLUTION_FILE: "YourApp.sln"
+  BUILD_DIR: "YourApp/bin/Release"
+  DEPLOY_DIR: "\\path\to\deployment\directory"
 
-            // Create an instance of HttpClient
-            using (HttpClient client = new HttpClient())
-            {
-                // Define the headers
-                client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/plain"));
+# Define the tag of the runner to be used
+default:
+  tags:
+    - windows-runner
 
-                // Define the JSON payload
-                var jsonData = new
-                {
-                    clientKey = "B6F2584E-28E1-4AB1-A403-D54E5A1EA8AF"
-                };
+before_script:
+  # Update NuGet packages
+  - nuget restore $SOLUTION_FILE
 
-                // Serialize the payload to a JSON string
-                string jsonString = System.Text.Json.JsonSerializer.Serialize(jsonData);
+build:
+  stage: build
+  script:
+    # Build the solution in Release mode
+    - msbuild $SOLUTION_FILE /p:Configuration=Release
 
-                // Create the StringContent from the JSON string
-                StringContent content = new StringContent(jsonString, Encoding.UTF8, "application/json");
+  artifacts:
+    paths:
+      - $BUILD_DIR
 
-                // Make the POST request
-                HttpResponseMessage response = await client.PostAsync(url, content);
-
-                // Ensure the response is successful
-                if (response.IsSuccessStatusCode)
-                {
-                    // Read the response content
-                    string responseContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine("Response received: " + responseContent);
-                }
-                else
-                {
-                    // Handle error response
-                    Console.WriteLine("Error: " + response.StatusCode);
-                }
-            }
-        }
-    }
-}
+deploy:
+  stage: deploy
+  script:
+    # Deploy the built application to the specified directory
+    - Copy-Item -Path "$BUILD_DIR\*" -Destination "$DEPLOY_DIR" -Recurse
+  environment:
+    name: production
+    url: https://yourapp.com
+  only:
+    - main
