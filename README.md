@@ -6,8 +6,8 @@ variables:
   SOLUTION_FILE: "YourApp.sln"
   BUILD_DIR: "YourApp/bin/Release"
   DEPLOY_DIR: "\\path\to\deployment\directory"
+  MSBUILD_PATH: "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"  # Update this path based on your Visual Studio version
 
-# Define the tag of the runner to be used
 default:
   tags:
     - windows-runner
@@ -19,8 +19,8 @@ before_script:
 build:
   stage: build
   script:
-    # Build the solution in Release mode
-    - msbuild $SOLUTION_FILE /p:Configuration=Release
+    # Build the solution using the specified MSBuild path
+    - &"$MSBUILD_PATH" $SOLUTION_FILE /p:Configuration=Release
 
   artifacts:
     paths:
